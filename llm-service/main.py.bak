@@ -1,0 +1,325 @@
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from typing import Dict, Optional, Any
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import logging
+import time
+from datetime import datetime
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(
+    title="Cardia LLM Service",
+    description="DeepSeek LLM for medical explanations and insights",
+    version="1.0.0"
+)
+
+# Enable CORS for Express backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5000", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Global model and tokenizer
+model = None
+tokenizer = None
+model_loaded = False
+
+# Model configuration - using smaller model for CPU inference
+# DeepSeek-V3.1 is too large, using a more practical model
+MODEL_NAME = "microsoft/phi-2"  # 2.7B params, good for medical reasoning
+# Alternative: "TinyLlama/TinyLlama-1.1B-Chat-v1.0" for even faster inference
+# Alternative: "meta-llama/Llama-2-7b-chat-hf" (requires auth)
+
+class ExplainRequest(BaseModel):
+    inputs: Dict[str, Any] = Field(..., description="Patient medical parameters")
+    prediction: Dict[str, Any] = Field(..., description="ONNX model prediction result")
+    include_recommendations: Optional[bool] = Field(True, description="Include lifestyle recommendations")
+    max_length: Optional[int] = Field(300, description="Maximum response length")
+
+class ExplainResponse(BaseModel):
+    explanation: str
+    key_factors: list[str]
+    recommendations: list[str]
+    summary: str
+    processing_time: float
+    model_used: str
+
+class HealthResponse(BaseModel):
+    status: str
+    model_loaded: bool
+    model_name: str
+    timestamp: str
+
+@app.on_event("startup")
+async def load_model():
+    """Load the LLM model on startup"""
+    global model, tokenizer, model_loaded
+    
+    try:
+        logger.info(f"Loading model: {MODEL_NAME}")
+        start_time = time.time()
+        
+        # Load tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(
+            MODEL_NAME,
+            trust_remote_code=True
+        )
+        
+        # Set pad token if not set
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        
+        # Load model with CPU optimization
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_NAME,
+            torch_dtype=torch.float32,  # Use float32 for CPU
+            low_cpu_mem_usage=True,
+            trust_remote_code=True,
+            device_map="cpu"
+        )
+        
+        model.eval()  # Set to evaluation mode
+        model_loaded = True
+        
+        load_time = time.time() - start_time
+        logger.info(f"✅ Model loaded successfully in {load_time:.2f}s")
+        logger.info(f"   Model: {MODEL_NAME}")
+        logger.info(f"   Device: CPU")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to load model: {str(e)}")
+        model_loaded = False
+        raise
+
+def build_prompt(inputs: dict, prediction: dict) -> str:
+    """Build a structured prompt for the LLM"""
+    
+    # Extract patient data
+    age = inputs.get('age', 'unknown')
+    sex = inputs.get('sex', 'unknown')
+    bp = inputs.get('restingBP', inputs.get('trestbps', 'unknown'))
+    chol = inputs.get('cholesterol', inputs.get('chol', 'unknown'))
+    fbs = inputs.get('fastingBS', inputs.get('fbs', 0))
+    max_hr = inputs.get('maxHeartRate', inputs.get('thalch', 'unknown'))
+    ex_angina = inputs.get('exerciseAngina', inputs.get('exang', 'unknown'))
+    chest_pain = inputs.get('chestPainType', inputs.get('cp', 'unknown'))
+    
+    # Extract prediction
+    risk_score = prediction.get('riskScore', prediction.get('risk', 0))
+    risk_pct = risk_score * 100
+    status = prediction.get('status', prediction.get('riskLevel', 'Unknown'))
+    
+    # Build prompt
+    prompt = f"""You are a medical AI assistant helping to explain heart disease risk predictions.
+
+Patient Profile:
+- Age: {age} years
+- Sex: {sex}
+- Resting Blood Pressure: {bp} mm Hg
+- Cholesterol: {chol} mg/dl
+- Fasting Blood Sugar: {'> 120 mg/dl' if fbs == 1 else '< 120 mg/dl'}
+- Maximum Heart Rate: {max_hr} bpm
+- Exercise Induced Angina: {ex_angina}
+- Chest Pain Type: {chest_pain}
+
+AI Model Prediction:
+- Heart Disease Risk: {risk_pct:.1f}%
+- Risk Level: {status}
+
+Task: Provide a clear, empathetic explanation that:
+1. Explains what this risk level means in simple terms
+2. Identifies 2-3 key contributing factors from the patient's data
+3. Provides 3 practical, actionable lifestyle recommendations
+4. Ends with an encouraging summary
+
+Keep the response concise, professional, and patient-friendly. Use bullet points where appropriate.
+
+Response:"""
+    
+    return prompt
+
+def parse_llm_response(response_text: str) -> dict:
+    """Parse LLM response into structured format"""
+    
+    # Simple parsing logic - can be enhanced
+    lines = response_text.strip().split('\n')
+    
+    explanation_parts = []
+    key_factors = []
+    recommendations = []
+    summary = ""
+    
+    current_section = "explanation"
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Detect sections
+        if any(keyword in line.lower() for keyword in ['key factor', 'contributing factor', 'main factor']):
+            current_section = "factors"
+            continue
+        elif any(keyword in line.lower() for keyword in ['recommendation', 'suggest', 'lifestyle change']):
+            current_section = "recommendations"
+            continue
+        elif any(keyword in line.lower() for keyword in ['summary', 'in conclusion', 'remember']):
+            current_section = "summary"
+            continue
+        
+        # Add to appropriate section
+        if current_section == "explanation":
+            explanation_parts.append(line)
+        elif current_section == "factors":
+            if line.startswith('-') or line.startswith('•') or line[0].isdigit():
+                key_factors.append(line.lstrip('-•0123456789. '))
+        elif current_section == "recommendations":
+            if line.startswith('-') or line.startswith('•') or line[0].isdigit():
+                recommendations.append(line.lstrip('-•0123456789. '))
+        elif current_section == "summary":
+            summary += line + " "
+    
+    # Fallback if parsing fails
+    if not key_factors:
+        key_factors = ["Blood pressure elevation", "Cholesterol levels", "Age-related risk factors"]
+    
+    if not recommendations:
+        recommendations = [
+            "Consult with a healthcare provider for personalized advice",
+            "Maintain a heart-healthy diet low in saturated fats",
+            "Engage in regular physical activity"
+        ]
+    
+    if not summary:
+        summary = "Regular monitoring and healthy lifestyle choices are important for heart health."
+    
+    explanation = ' '.join(explanation_parts) if explanation_parts else response_text[:200]
+    
+    return {
+        "explanation": explanation,
+        "key_factors": key_factors[:3],  # Limit to 3
+        "recommendations": recommendations[:3],  # Limit to 3
+        "summary": summary.strip()
+    }
+
+@app.get("/", response_model=HealthResponse)
+async def root():
+    """Health check endpoint"""
+    return {
+        "status": "healthy" if model_loaded else "initializing",
+        "model_loaded": model_loaded,
+        "model_name": MODEL_NAME,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/health", response_model=HealthResponse)
+async def health():
+    """Detailed health check"""
+    return {
+        "status": "healthy" if model_loaded else "model_not_loaded",
+        "model_loaded": model_loaded,
+        "model_name": MODEL_NAME,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.post("/explain", response_model=ExplainResponse)
+async def explain(request: ExplainRequest):
+    """Generate explanation for heart disease prediction"""
+    
+    if not model_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Model not loaded. Please wait for initialization."
+        )
+    
+    try:
+        start_time = time.time()
+        logger.info(f"Received explain request for patient age {request.inputs.get('age', 'unknown')}")
+        
+        # Build prompt
+        prompt = build_prompt(request.inputs, request.prediction)
+        logger.debug(f"Prompt: {prompt[:100]}...")
+        
+        # Tokenize
+        inputs = tokenizer(
+            prompt,
+            return_tensors="pt",
+            truncation=True,
+            max_length=512
+        )
+        
+        # Generate response
+        with torch.no_grad():
+            output_ids = model.generate(
+                inputs.input_ids,
+                max_length=request.max_length + inputs.input_ids.shape[1],
+                temperature=0.7,
+                top_p=0.9,
+                do_sample=True,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+                num_return_sequences=1
+            )
+        
+        # Decode response
+        full_response = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+        
+        # Extract only the generated part (remove prompt)
+        response_text = full_response[len(prompt):].strip()
+        
+        # Parse into structured format
+        parsed = parse_llm_response(response_text)
+        
+        processing_time = time.time() - start_time
+        logger.info(f"✅ Generated explanation in {processing_time:.2f}s")
+        
+        return ExplainResponse(
+            explanation=parsed["explanation"],
+            key_factors=parsed["key_factors"],
+            recommendations=parsed["recommendations"],
+            summary=parsed["summary"],
+            processing_time=processing_time,
+            model_used=MODEL_NAME
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error generating explanation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Explanation generation failed: {str(e)}")
+
+@app.post("/batch-explain")
+async def batch_explain(requests: list[ExplainRequest]):
+    """Generate explanations for multiple predictions (for dashboard trends)"""
+    
+    if not model_loaded:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    results = []
+    for req in requests:
+        try:
+            result = await explain(req)
+            results.append(result)
+        except Exception as e:
+            logger.error(f"Error in batch processing: {str(e)}")
+            results.append(None)
+    
+    return {"results": results}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        log_level="info"
+    )

@@ -1,0 +1,26 @@
+{
+  "features": [
+    "id",
+    "age",
+    "sex",
+    "dataset",
+    "cp",
+    "trestbps",
+    "chol",
+    "fbs",
+    "restecg",
+    "thalch",
+    "exang",
+    "oldpeak",
+    "slope",
+    "ca",
+    "thal"
+  ],
+  "n_features": 15,
+  "model_type": "Random Forest",
+  "metrics": {
+    "accuracy": 0.8913043478260869,
+    "f1_score": 0.9065420560747663,
+    "roc_auc": 0.9544476327116213
+  }
+}

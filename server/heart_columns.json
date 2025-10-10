@@ -1,0 +1,55 @@
+{
+  "columns": [
+    "Age",
+    "Sex",
+    "ChestPainType",
+    "RestingBP",
+    "Cholesterol",
+    "FastingBS",
+    "RestingECG",
+    "MaxHR",
+    "ExerciseAngina",
+    "Oldpeak",
+    "ST_Slope"
+  ],
+  "description": "Feature column order for heart disease prediction model",
+  "encoding": {
+    "Sex": {
+      "M": 1,
+      "Male": 1,
+      "F": 0,
+      "Female": 0
+    },
+    "ChestPainType": {
+      "TA": 0,
+      "Typical Angina": 0,
+      "ATA": 1,
+      "Atypical Angina": 1,
+      "NAP": 2,
+      "Non-Anginal Pain": 2,
+      "ASY": 3,
+      "Asymptomatic": 3
+    },
+    "RestingECG": {
+      "Normal": 0,
+      "ST": 1,
+      "LVH": 2
+    },
+    "ExerciseAngina": {
+      "N": 0,
+      "No": 0,
+      "Y": 1,
+      "Yes": 1
+    },
+    "ST_Slope": {
+      "Up": 0,
+      "Flat": 1,
+      "Down": 2
+    },
+    "FastingBS": {
+      "0": 0,
+      "1": 1
+    }
+  },
+  "note": "Update this file if your model was trained with different column order or encoding"
+}
