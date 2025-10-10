@@ -24,11 +24,12 @@ function App() {
     setError(null);
     
     try {
+      // Increase timeout to allow ONNX + LLM generation to complete (can take ~15-30s)
       const response = await axios.post(`${API_BASE_URL}/predict`, formData, {
         headers: {
           'Content-Type': 'application/json',
         },
-        timeout: 10000, // 10 second timeout
+        timeout: 45000, // 45 seconds to cover LLM generation under load
       });
       
       setResult(response.data);

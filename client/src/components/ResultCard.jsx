@@ -4,11 +4,15 @@ import axios from 'axios';
 const ResultCard = ({ result, isLoading, inputs }) => {
   const [explanation, setExplanation] = useState(null);
   const [explanationLoading, setExplanationLoading] = useState(false);
-  const [showExplanation, setShowExplanation] = useState(false);
+  const [showExplanation, setShowExplanation] = useState(true); // Phase 4: Auto-show explanations
   
-  // Auto-fetch explanation when result changes
+  // Phase 4: Check if explanation comes with prediction result
   useEffect(() => {
-    if (result && inputs && !explanation) {
+    if (result && result.aiExplanation) {
+      setExplanation(result.aiExplanation);
+      setShowExplanation(true);
+    } else if (result && inputs && !explanation) {
+      // Fallback: fetch explanation separately if not included
       fetchExplanation();
     }
   }, [result, inputs]);

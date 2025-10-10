@@ -2,12 +2,172 @@ const express = require('express');
 const ort = require('onnxruntime-node');
 const path = require('path');
 const fs = require('fs');
+const axios = require('axios');
 
 const router = express.Router();
+
+// LLM Service URL
+const LLM_SERVICE_URL = process.env.LLM_SERVICE_URL || 'http://localhost:8000';
 
 // Global variable to cache the ONNX session and column config
 let session = null;
 let columnConfig = null;
+
+/**
+ * Phase 4.1: Enhanced Data-Driven Prompt Builder
+ * Generates intelligent, analytical prompts with parameter-specific insights
+ */
+function buildContextualPrompt(inputs, prediction) {
+  const { riskScore } = prediction;
+  const riskPercent = Math.round(riskScore * 100);
+  
+  // Determine risk context
+  let riskContext = "";
+  let analyticalFocus = "";
+  
+  if (riskScore <= 0.3) {
+    riskContext = "LOW RISK";
+    analyticalFocus = "maintaining optimal cardiovascular health and reinforcing positive indicators";
+  } else if (riskScore <= 0.6) {
+    riskContext = "MODERATE RISK";
+    analyticalFocus = "analyzing key risk factors and their physiological relationships to cardiovascular strain";
+  } else {
+    riskContext = "HIGH RISK";
+    analyticalFocus = "understanding critical risk indicators and their cumulative impact on heart disease probability";
+  }
+  
+  // Analyze patient data for specific insights
+  const age = inputs.age;
+  const bp = inputs.restingBP;
+  const chol = inputs.cholesterol;
+  const maxHR = inputs.maxHeartRate;
+  const fbs = inputs.fastingBS;
+  const exang = inputs.exerciseAngina;
+  const oldpeak = inputs.oldpeak || 0;
+  
+  // Build data-specific observations
+  let dataInsights = [];
+  
+  // Age analysis
+  if (age > 60) {
+    dataInsights.push(`Age ${age} increases baseline cardiovascular risk due to arterial aging`);
+  } else if (age > 50) {
+    dataInsights.push(`Age ${age} is a moderate risk factor requiring proactive monitoring`);
+  } else if (age < 40) {
+    dataInsights.push(`Age ${age} is a protective factor, though lifestyle still matters`);
+  }
+  
+  // Blood pressure analysis with clinical context
+  if (bp > 160) {
+    dataInsights.push(`BP ${bp} mmHg (Stage 2 Hypertension) significantly strains cardiac workload and vessel integrity`);
+  } else if (bp > 140) {
+    dataInsights.push(`BP ${bp} mmHg (Stage 1 Hypertension) elevates cardiovascular stress over time`);
+  } else if (bp > 130) {
+    dataInsights.push(`BP ${bp} mmHg (Elevated range) suggests early hypertensive patterns emerging`);
+  } else if (bp < 100) {
+    dataInsights.push(`BP ${bp} mmHg (Low-normal) is generally protective for cardiovascular health`);
+  }
+  
+  // Cholesterol analysis with specificity
+  if (chol > 280) {
+    dataInsights.push(`Cholesterol ${chol} mg/dL (Very High) accelerates atherosclerotic plaque formation`);
+  } else if (chol > 240) {
+    dataInsights.push(`Cholesterol ${chol} mg/dL (High) increases arterial plaque risk and vessel narrowing`);
+  } else if (chol > 200) {
+    dataInsights.push(`Cholesterol ${chol} mg/dL (Borderline High) warrants dietary attention`);
+  } else if (chol < 170) {
+    dataInsights.push(`Cholesterol ${chol} mg/dL (Optimal) supports healthy vascular function`);
+  }
+  
+  // Heart rate analysis with context
+  if (maxHR < 100) {
+    dataInsights.push(`Max Heart Rate ${maxHR} bpm (Reduced capacity) may indicate cardiac inefficiency or beta-blocker use`);
+  } else if (maxHR < 120) {
+    dataInsights.push(`Max Heart Rate ${maxHR} bpm (Below expected) suggests suboptimal cardiovascular fitness`);
+  } else if (maxHR > 180 && age > 50) {
+    dataInsights.push(`Max Heart Rate ${maxHR} bpm (Elevated response) could indicate cardiac stress`);
+  }
+  
+  // Exercise angina - critical indicator
+  if (exang === 'Y' || exang === true || exang === 'Yes') {
+    dataInsights.push(`Exercise-induced angina indicates coronary artery narrowing limiting oxygen delivery during exertion`);
+  }
+  
+  // Fasting blood sugar
+  if (fbs === 1 || fbs === true) {
+    dataInsights.push(`Elevated fasting blood sugar (>120 mg/dL) compounds cardiovascular risk through metabolic syndrome pathways`);
+  }
+  
+  // Oldpeak (ST depression)
+  if (oldpeak > 2) {
+    dataInsights.push(`ST depression ${oldpeak}mm indicates significant ischemic changes during stress testing`);
+  } else if (oldpeak > 1) {
+    dataInsights.push(`ST depression ${oldpeak}mm suggests mild cardiac ischemia under stress`);
+  }
+  
+  // Combine insights into narrative context
+  const keyFindings = dataInsights.slice(0, 4).join('; ');
+  
+  // Build enhanced analytical prompt
+  const prompt = `You are an AI health data analyst for 'Cardia', specializing in cardiovascular risk interpretation.
+
+CONTEXT:
+An advanced machine learning model analyzed multiple cardiac biomarkers and calculated a ${riskPercent}% heart disease risk probability (${riskContext}).
+
+YOUR ROLE:
+- Act as a medical data interpreter, NOT a physician
+- Explain HOW specific parameters influence cardiovascular risk through physiological mechanisms
+- Connect data points (e.g., "BP 160 + Cholesterol 280 = increased arterial pressure + plaque buildup")
+- Use evidence-based reasoning about cardiovascular physiology
+- NO generic disclaimers - you're interpreting data, not diagnosing
+- Sound analytical, informed, and educational
+
+PATIENT CARDIOVASCULAR PROFILE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Demographics:
+  • Age: ${age} years | Gender: ${inputs.sex}
+
+Hemodynamic Parameters:
+  • Resting Blood Pressure: ${bp} mm Hg ${bp > 140 ? '⚠️ ELEVATED' : bp > 130 ? '⚡ BORDERLINE' : '✓ NORMAL'}
+  • Maximum Heart Rate Achieved: ${maxHR} bpm ${maxHR < 120 ? '⚠️ REDUCED' : '✓'}
+
+Metabolic Markers:
+  • Total Cholesterol: ${chol} mg/dL ${chol > 240 ? '⚠️ HIGH' : chol > 200 ? '⚡ BORDERLINE' : '✓ OPTIMAL'}
+  • Fasting Blood Sugar: ${fbs ? 'ELEVATED (>120 mg/dL) ⚠️' : 'Normal (<120 mg/dL) ✓'}
+
+Clinical Observations:
+  • Chest Pain Type: ${inputs.chestPainType}
+  • Exercise-Induced Angina: ${exang ? 'YES ⚠️ (Critical indicator)' : 'NO ✓'}
+  • ST Depression (Oldpeak): ${oldpeak} mm ${oldpeak > 1 ? '⚠️' : '✓'}
+
+ANALYTICAL FINDINGS:
+${keyFindings || 'Multiple parameters analyzed for cardiovascular risk correlation'}
+
+COMPUTED RISK: ${riskPercent}% (${riskContext})
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TASK - Generate a ${riskContext} analysis focusing on ${analyticalFocus}:
+
+🔍 KEY INSIGHTS: (2-3 bullet points)
+Explain the PHYSIOLOGICAL RELATIONSHIPS between the patient's key parameters and cardiovascular risk.
+Example: "Your cholesterol level of ${chol} mg/dL combined with BP ${bp} mmHg creates increased arterial plaque deposits while simultaneously raising vessel wall stress."
+
+💡 PERSONALIZED WELLNESS STRATEGY: (3 specific action items with ✓)
+Provide DATA-INFORMED recommendations tied to the actual parameter values.
+Example: "✓ Reduce sodium to <2000mg/day to target BP reduction from ${bp} to <130 mmHg"
+
+${riskScore <= 0.3 ? 
+  'TONE: Encouraging and reinforcing - highlight protective factors and maintenance strategies.' :
+  riskScore <= 0.6 ?
+  'TONE: Educational and motivating - explain modifiable risk factors and their impact pathways.' :
+  'TONE: Serious but empowering - emphasize urgency while providing clear action steps and showing control through lifestyle modification.'}
+
+End with ONE motivational closing line that references their specific data (e.g., "Your ${age}-year cardiovascular journey starts with understanding these numbers").
+
+IMPORTANT: Be analytical and specific, NOT generic. Reference actual parameter values. Explain WHY things matter physiologically.`;
+
+  return prompt;
+}
 const MODEL_PATH = path.join(__dirname, '../models/heart_model.onnx');
 const COLUMNS_PATH = path.join(__dirname, '../models/heart_columns.json'); // Updated to models folder
 
@@ -383,7 +543,47 @@ router.post('/', async (req, res) => {
     
     console.log(`✅ Prediction result: ${(riskScore * 100).toFixed(1)}% - ${riskLevel}`);
     
-    // Return prediction result in the format expected by frontend
+    // Phase 4: Generate contextual prompt and get AI explanation
+    let aiExplanation = null;
+    try {
+      const contextualPrompt = buildContextualPrompt(req.body, { riskScore, riskLevel });
+      console.log('🤖 Requesting AI explanation from DeepSeek...');
+      
+      const llmResponse = await axios.post(
+        `${LLM_SERVICE_URL}/explain`,
+        { 
+          prompt: contextualPrompt,
+          inputs: req.body,
+          prediction: { risk: riskScore, riskLevel }
+        },
+        { 
+          timeout: 30000,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+      
+      aiExplanation = llmResponse.data;
+      console.log('✅ AI explanation generated successfully');
+    } catch (llmError) {
+      console.warn('⚠️  LLM service unavailable, using fallback explanation');
+      // Fallback explanation based on risk level
+      aiExplanation = {
+        explanation: message,
+        key_factors: Object.entries(factors)
+          .filter(([_, value]) => value === 'elevated' || value === 'concerning')
+          .map(([key, _]) => `${key.charAt(0).toUpperCase() + key.slice(1)} levels need attention`),
+        recommendations: riskScore > 0.6 
+          ? ['Consult a cardiologist soon', 'Focus on heart-healthy diet', 'Increase physical activity gradually']
+          : riskScore > 0.3
+          ? ['Monitor blood pressure regularly', 'Maintain balanced diet', 'Exercise 30 minutes daily']
+          : ['Continue healthy lifestyle', 'Regular health checkups', 'Stay physically active'],
+        summary: message,
+        processing_time: 0,
+        model_used: 'fallback'
+      };
+    }
+    
+    // Return prediction result with AI explanation
     res.json({
       success: true,
       riskScore: riskScore,
@@ -397,6 +597,11 @@ router.post('/', async (req, res) => {
       inputData: req.body,
       modelVersion: usingONNX ? '2.0.0-onnx' : '1.0.0-mock',
       usingONNX: prediction.usingONNX || false,
+      // Phase 4: Include AI explanation in prediction response
+      aiExplanation: aiExplanation,
+      explanation: aiExplanation.explanation, // Direct access
+      key_factors: aiExplanation.key_factors,
+      recommendations: aiExplanation.recommendations,
       disclaimer: usingONNX 
         ? 'Prediction made using ONNX deep learning model. Please consult a healthcare professional for proper diagnosis.'
         : 'This is a mock prediction for demonstration purposes only. Real ONNX model not available.'
