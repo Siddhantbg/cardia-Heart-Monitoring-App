@@ -4,7 +4,7 @@ require('dotenv').config();
 
 const predictRoute = require('./routes/predictONNX'); // Updated to use ONNX version
 const extractRoute = require('./routes/extract');
-const explainRoute = require('./routes/explain'); // LLM explanation service
+// LLM explanation service removed
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -38,7 +38,7 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/predict', predictRoute);
 app.use('/extract', extractRoute);
-app.use('/explain', explainRoute);
+// /explain route removed as DeepSeek dependency is dropped
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -50,7 +50,7 @@ app.get('/', (req, res) => {
       health: 'GET /health',
       predict: 'POST /predict',
       extract: 'POST /extract',
-      explain: 'POST /explain'
+  // explain: 'POST /explain' // removed
     },
     documentation: 'https://github.com/your-repo/cardia',
     disclaimer: 'This API is for educational purposes only and should not replace professional medical advice.'
@@ -67,7 +67,7 @@ app.use((req, res) => {
       'GET /health',
       'POST /predict',
       'POST /extract',
-      'POST /explain'
+  // 'POST /explain'
     ]
   });
 });

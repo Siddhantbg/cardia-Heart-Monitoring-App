@@ -2,12 +2,11 @@ const express = require('express');
 const ort = require('onnxruntime-node');
 const path = require('path');
 const fs = require('fs');
-const axios = require('axios');
+// Note: LLM dependencies removed in Phase 4.1 rollback
 
 const router = express.Router();
 
-// LLM Service URL
-const LLM_SERVICE_URL = process.env.LLM_SERVICE_URL || 'http://localhost:8000';
+// LLM Service removed: predictions no longer call external LLM
 
 // Global variable to cache the ONNX session and column config
 let session = null;
@@ -168,7 +167,8 @@ IMPORTANT: Be analytical and specific, NOT generic. Reference actual parameter v
 
   return prompt;
 }
-const MODEL_PATH = path.join(__dirname, '../models/heart_model.onnx');
+// Use the updated best-performing ONNX model
+const MODEL_PATH = path.join(__dirname, '../models/best_model.onnx');
 const COLUMNS_PATH = path.join(__dirname, '../models/heart_columns.json'); // Updated to models folder
 
 // Load column configuration
@@ -543,47 +543,7 @@ router.post('/', async (req, res) => {
     
     console.log(`✅ Prediction result: ${(riskScore * 100).toFixed(1)}% - ${riskLevel}`);
     
-    // Phase 4: Generate contextual prompt and get AI explanation
-    let aiExplanation = null;
-    try {
-      const contextualPrompt = buildContextualPrompt(req.body, { riskScore, riskLevel });
-      console.log('🤖 Requesting AI explanation from DeepSeek...');
-      
-      const llmResponse = await axios.post(
-        `${LLM_SERVICE_URL}/explain`,
-        { 
-          prompt: contextualPrompt,
-          inputs: req.body,
-          prediction: { risk: riskScore, riskLevel }
-        },
-        { 
-          timeout: 30000,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-      
-      aiExplanation = llmResponse.data;
-      console.log('✅ AI explanation generated successfully');
-    } catch (llmError) {
-      console.warn('⚠️  LLM service unavailable, using fallback explanation');
-      // Fallback explanation based on risk level
-      aiExplanation = {
-        explanation: message,
-        key_factors: Object.entries(factors)
-          .filter(([_, value]) => value === 'elevated' || value === 'concerning')
-          .map(([key, _]) => `${key.charAt(0).toUpperCase() + key.slice(1)} levels need attention`),
-        recommendations: riskScore > 0.6 
-          ? ['Consult a cardiologist soon', 'Focus on heart-healthy diet', 'Increase physical activity gradually']
-          : riskScore > 0.3
-          ? ['Monitor blood pressure regularly', 'Maintain balanced diet', 'Exercise 30 minutes daily']
-          : ['Continue healthy lifestyle', 'Regular health checkups', 'Stay physically active'],
-        summary: message,
-        processing_time: 0,
-        model_used: 'fallback'
-      };
-    }
-    
-    // Return prediction result with AI explanation
+    // Return prediction result (LLM explanation removed)
     res.json({
       success: true,
       riskScore: riskScore,
@@ -597,11 +557,6 @@ router.post('/', async (req, res) => {
       inputData: req.body,
       modelVersion: usingONNX ? '2.0.0-onnx' : '1.0.0-mock',
       usingONNX: prediction.usingONNX || false,
-      // Phase 4: Include AI explanation in prediction response
-      aiExplanation: aiExplanation,
-      explanation: aiExplanation.explanation, // Direct access
-      key_factors: aiExplanation.key_factors,
-      recommendations: aiExplanation.recommendations,
       disclaimer: usingONNX 
         ? 'Prediction made using ONNX deep learning model. Please consult a healthcare professional for proper diagnosis.'
         : 'This is a mock prediction for demonstration purposes only. Real ONNX model not available.'

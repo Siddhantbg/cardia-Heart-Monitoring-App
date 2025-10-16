@@ -1,44 +1,7 @@
-import { useState, useEffect } from 'react';
-import axios from 'axios';
+// React state not needed here since LLM explanation is disabled
 
 const ResultCard = ({ result, isLoading, inputs }) => {
-  const [explanation, setExplanation] = useState(null);
-  const [explanationLoading, setExplanationLoading] = useState(false);
-  const [showExplanation, setShowExplanation] = useState(true); // Phase 4: Auto-show explanations
-  
-  // Phase 4: Check if explanation comes with prediction result
-  useEffect(() => {
-    if (result && result.aiExplanation) {
-      setExplanation(result.aiExplanation);
-      setShowExplanation(true);
-    } else if (result && inputs && !explanation) {
-      // Fallback: fetch explanation separately if not included
-      fetchExplanation();
-    }
-  }, [result, inputs]);
-  
-  const fetchExplanation = async () => {
-    if (!result || !inputs) return;
-    
-    setExplanationLoading(true);
-    try {
-      const response = await axios.post('http://localhost:5000/explain', {
-        inputs,
-        prediction: result,
-        maxLength: 300
-      });
-      
-      if (response.data.success) {
-        setExplanation(response.data);
-        setShowExplanation(true);
-      }
-    } catch (error) {
-      console.error('Failed to fetch explanation:', error);
-      // Silently fail - explanation is optional
-    } finally {
-      setExplanationLoading(false);
-    }
-  };
+  // DeepSeek/LLM explanation removed in this configuration
   
   if (isLoading) {
     return (
@@ -179,23 +142,23 @@ const ResultCard = ({ result, isLoading, inputs }) => {
       </div>
 
       {/* AI Explanation Section */}
-      {(explanation || explanationLoading) && (
+      {false && (
         <div className="mb-6">
           <button
-            onClick={() => setShowExplanation(!showExplanation)}
+            onClick={() => {}}
             className="w-full flex items-center justify-between p-3 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors border border-purple-200"
           >
             <div className="flex items-center">
               <span className="text-2xl mr-2">🤖</span>
               <span className="font-semibold text-purple-900">AI-Powered Explanation</span>
-              {explanation && !explanation.fallback && (
+              {false && (
                 <span className="ml-2 text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded">
-                  {explanation.model_used || 'LLM'}
+                  LLM
                 </span>
               )}
             </div>
             <svg
-              className={`w-5 h-5 text-purple-600 transform transition-transform ${showExplanation ? 'rotate-180' : ''}`}
+              className={`w-5 h-5 text-purple-600 transform transition-transform`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -204,32 +167,32 @@ const ResultCard = ({ result, isLoading, inputs }) => {
             </svg>
           </button>
 
-          {showExplanation && (
+          {false && (
             <div className="mt-3 p-4 bg-white border border-purple-200 rounded-lg">
-              {explanationLoading ? (
+              {false ? (
                 <div className="flex items-center justify-center py-4">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
                   <span className="ml-3 text-gray-600">Generating explanation...</span>
                 </div>
-              ) : explanation ? (
+              ) : false ? (
                 <>
                   {/* Main Explanation */}
                   <div className="mb-4">
-                    <p className="text-gray-700 leading-relaxed">{explanation.explanation}</p>
+                    <p className="text-gray-700 leading-relaxed"></p>
                   </div>
 
                   {/* Key Contributing Factors */}
-                  {explanation.key_factors && explanation.key_factors.length > 0 && (
+                  {false && (
                     <div className="mb-4">
                       <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
                         <span className="mr-2">🔍</span>
                         Key Contributing Factors:
                       </h4>
                       <ul className="space-y-1">
-                        {explanation.key_factors.map((factor, idx) => (
+                        {[].map((factor, idx) => (
                           <li key={idx} className="flex items-start">
                             <span className="text-purple-500 mr-2">•</span>
-                            <span className="text-gray-700 text-sm">{factor}</span>
+                            <span className="text-gray-700 text-sm"></span>
                           </li>
                         ))}
                       </ul>
@@ -237,17 +200,17 @@ const ResultCard = ({ result, isLoading, inputs }) => {
                   )}
 
                   {/* Recommendations */}
-                  {explanation.recommendations && explanation.recommendations.length > 0 && (
+                  {false && (
                     <div className="mb-4">
                       <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
                         <span className="mr-2">💡</span>
                         Personalized Recommendations:
                       </h4>
                       <ul className="space-y-1">
-                        {explanation.recommendations.map((rec, idx) => (
+                        {[].map((rec, idx) => (
                           <li key={idx} className="flex items-start">
                             <span className="text-green-500 mr-2">✓</span>
-                            <span className="text-gray-700 text-sm">{rec}</span>
+                            <span className="text-gray-700 text-sm"></span>
                           </li>
                         ))}
                       </ul>
@@ -255,19 +218,16 @@ const ResultCard = ({ result, isLoading, inputs }) => {
                   )}
 
                   {/* Summary */}
-                  {explanation.summary && (
+                  {false && (
                     <div className="p-3 bg-purple-50 rounded-lg border-l-4 border-purple-500">
-                      <p className="text-sm text-purple-900 font-medium">
-                        {explanation.summary}
-                      </p>
+                      <p className="text-sm text-purple-900 font-medium"></p>
                     </div>
                   )}
 
                   {/* Processing time indicator */}
-                  {explanation.processing_time && (
+                  {false && (
                     <div className="mt-3 text-xs text-gray-500 text-right">
-                      Generated in {explanation.processing_time.toFixed(2)}s
-                      {explanation.cached && ' (cached)'}
+                      Generated in 0s
                     </div>
                   )}
                 </>
@@ -295,14 +255,6 @@ const ResultCard = ({ result, isLoading, inputs }) => {
         >
           New Prediction
         </button>
-        {!showExplanation && !explanationLoading && !explanation && (
-          <button
-            onClick={fetchExplanation}
-            className="flex-1 py-2 px-4 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
-          >
-            Get AI Explanation
-          </button>
-        )}
         <button
           onClick={() => window.print()}
           className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"

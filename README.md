@@ -6,10 +6,10 @@ An AI-powered web application for predicting heart disease risk using the MERN s
 
 - **Medical Parameter Input**: Interactive form with validation & OCR extraction
 - **Real ONNX AI Model**: Random Forest model with 89.13% accuracy
-- **AI Explanations**: Integrated LLM (microsoft/phi-2) for medical insights
+- **Data-Backed Interpretation**: Clear, parameter-based interpretation (no external LLM)
 - **Real-time Results**: Instant risk assessment with detailed interpretation
 - **Responsive Design**: Clean, modern UI with Tailwind CSS
-- **Full Stack Architecture**: React frontend + Express backend + Python LLM microservice
+- **Full Stack Architecture**: React frontend + Express backend
 
 ## 📱 Tech Stack
 
@@ -27,8 +27,6 @@ An AI-powered web application for predicting heart disease risk using the MERN s
 
 ### Integrated AI Stack
 - **ONNX Runtime** for ML inference (Random Forest model)
-- **Python FastAPI** microservice for LLM explanations
-- **Microsoft Phi-2** (2.7B parameters) for medical text generation
 - **OCR** for medical report parameter extraction
 
 ### Future (Phase 3+)
@@ -41,11 +39,8 @@ An AI-powered web application for predicting heart disease risk using the MERN s
 
 ### Prerequisites
 - Node.js (v16 or higher)
-- Python 3.10+ (for LLM service)
 - npm or yarn
 - Git
-- ~8GB RAM (for LLM model)
-- ~5GB disk space (for model download)
 
 ### Quick Start
 
@@ -56,32 +51,10 @@ An AI-powered web application for predicting heart disease risk using the MERN s
    npm run install:all
    ```
 
-2. **Set up Python LLM service (first time only):**
-   ```powershell
-   .\setup-llm.ps1
-   ```
-   This will:
-   - Create Python virtual environment
-   - Install LLM dependencies (~5GB model download)
-   - Takes 5-10 minutes on first run
-
-3. **Start all services (recommended):**
-   ```powershell
-   .\start-with-llm.ps1
-   ```
-   This will start:
-   - Frontend: http://localhost:5173
-   - Backend: http://localhost:5000
-   - LLM Service: http://localhost:8000
-
-4. **Or start manually:**
+2. **Start services:**
    ```bash
    # Terminal 1: Backend & Frontend
    npm run dev
-
-   # Terminal 2: LLM Service
-   cd llm-service
-   python main.py
    ```
 
 5. **Individual commands:**
@@ -96,7 +69,7 @@ An AI-powered web application for predicting heart disease risk using the MERN s
    npm run start
    ```
 
-📖 **For detailed LLM integration info, see [LLM_INTEGRATION.md](LLM_INTEGRATION.md)**
+📖 **ONNX model details in [server/ONNX_SETUP.md](server/ONNX_SETUP.md)**
 
 ## 📁 Project Structure
 
@@ -161,27 +134,6 @@ Content-Type: application/json
 }
 ```
 
-#### AI Explanation (LLM Service)
-```http
-POST /explain
-Content-Type: application/json
-
-{
-  "inputs": { /* same as /predict input */ },
-  "prediction": { /* result from /predict */ }
-}
-```
-
-**Response:**
-```json
-{
-  "explanation": "Based on your medical parameters...",
-  "key_factors": ["Age: 45 years...", "High cholesterol..."],
-  "recommendations": ["Consult a cardiologist...", "Lifestyle modifications..."],
-  "summary": "The 61.3% risk indicates moderate concern.",
-  "cached": false
-}
-```
 
 #### OCR Extraction
 ```http
@@ -236,12 +188,8 @@ file: <medical_report.pdf or image>
 - **Training**: Scikit-learn → ONNX export
 - **Inference**: CPU-based using onnxruntime-node
 
-### LLM Explanation Service
-- **Model**: microsoft/phi-2 (2.7B parameters)
-- **Framework**: PyTorch + Transformers
-- **Purpose**: Generate patient-friendly medical explanations
-- **Output**: Structured responses with key factors, recommendations, and summaries
-- **Performance**: 10-30 seconds per explanation (CPU)
+### Model File
+- **Path**: `server/models/best_model.onnx`
 
 ## 🔧 Configuration
 
@@ -309,7 +257,7 @@ npm run clean
 
 - **Educational Purpose**: This application is for educational and demonstration purposes only
 - **Not Medical Advice**: Predictions should not replace professional medical consultation
-- **Mock Data**: Current algorithm uses mock predictions, not real medical models
+- **Model File**: Ensure `server/models/best_model.onnx` is present
 - **Beta Software**: This is a development prototype
 
 ## 🤝 Contributing

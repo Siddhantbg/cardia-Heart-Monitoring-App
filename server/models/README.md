@@ -4,7 +4,7 @@ Place your trained heart disease prediction ONNX model in this directory.
 
 ## Model File
 
-**Expected filename:** `heart_model.onnx`
+**Expected filename:** `best_model.onnx`
 
 ## Model Specifications
 
@@ -80,7 +80,7 @@ dummy_input = torch.randn(1, 11)
 torch.onnx.export(
     model,
     dummy_input,
-    "heart_model.onnx",
+    "best_model.onnx",
     export_params=True,
     opset_version=11,
     input_names=['input'],
@@ -115,7 +115,7 @@ model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy']
 
 # Convert to ONNX
 spec = (tf.TensorSpec((None, 11), tf.float32, name="input"),)
-output_path = "heart_model.onnx"
+output_path = "best_model.onnx"
 
 model_proto, _ = tf2onnx.convert.from_keras(model, input_signature=spec, opset=13)
 
@@ -138,7 +138,7 @@ import onnxruntime as ort
 import numpy as np
 
 # Load session
-session = ort.InferenceSession("heart_model.onnx")
+session = ort.InferenceSession("best_model.onnx")
 
 # Test input (normalized features)
 test_input = np.array([[0.5, 1, 2, 0.3, 0.4, 1, 0, 0.2, 1, 0.5, 1]], dtype=np.float32)
