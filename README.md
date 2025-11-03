@@ -1,15 +1,18 @@
 # 🩺 Cardia - Heart Health Predictor
 
-An AI-powered web application for predicting heart disease risk using the MERN stack.
+> Last updated: 2025-11-04
 
-## 🚀 Phase 2 Features (Current)
+An AI-powered web application for predicting heart disease risk using ONNX machine learning and the MERN stack.
 
-- **Medical Parameter Input**: Interactive form with validation & OCR extraction
-- **Real ONNX AI Model**: Random Forest model with 89.13% accuracy
-- **Data-Backed Interpretation**: Clear, parameter-based interpretation (no external LLM)
-- **Real-time Results**: Instant risk assessment with detailed interpretation
+## 🚀 Current Features
+
+- **Medical Parameter Input**: Interactive form with validation
+- **ONNX AI Model**: Trained Random Forest model (`best_model.onnx`, ~60 KB)
+- **Real-time Predictions**: Instant risk assessment with confidence scores
+- **Risk Interpretation**: Clear, data-driven risk level categorization
+- **OCR Extraction**: Extract parameters from medical reports (PDF/images)
 - **Responsive Design**: Clean, modern UI with Tailwind CSS
-- **Full Stack Architecture**: React frontend + Express backend
+- **Full Stack Architecture**: React + Vite frontend, Express backend
 
 ## 📱 Tech Stack
 
@@ -25,15 +28,17 @@ An AI-powered web application for predicting heart disease risk using the MERN s
 - **RESTful API** design
 - **Error handling** and validation
 
-### Integrated AI Stack
-- **ONNX Runtime** for ML inference (Random Forest model)
+### AI & ML
+- **ONNX Runtime Node** (`onnxruntime-node`) for fast CPU inference
+- **Trained Random Forest Model** (`best_model.onnx`)
 - **OCR** for medical report parameter extraction
 
-### Future (Phase 3+)
+### Future Enhancements
 - **MongoDB** for data persistence
 - **User authentication & profiles**
 - **Historical tracking & analytics**
 - **Enhanced data visualization**
+- **GPU acceleration** for larger models
 
 ## 🛠️ Development Setup
 
@@ -51,46 +56,54 @@ An AI-powered web application for predicting heart disease risk using the MERN s
    npm run install:all
    ```
 
-2. **Start services:**
+2. **Ensure model file exists:**
    ```bash
-   # Terminal 1: Backend & Frontend
+   # Verify best_model.onnx is present (~60 KB)
+   ls server/models/best_model.onnx
+   ```
+
+3. **Start services:**
+   ```bash
+   # PowerShell: Start both backend & frontend
    npm run dev
+   
+   # Or start individually:
+   cd server; npm run dev   # Backend on port 5000
+   cd client; npm run dev   # Frontend on port 5173
    ```
 
-5. **Individual commands:**
-   ```bash
-   # Frontend only
-   npm run client:dev
+4. **Access the app:**
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:5000
 
-   # Backend only
-   npm run server:dev
-
-   # Production build
-   npm run start
-   ```
-
-📖 **ONNX model details in [server/ONNX_SETUP.md](server/ONNX_SETUP.md)**
+📖 **Full ONNX setup guide: [server/ONNX_SETUP.md](server/ONNX_SETUP.md)**
 
 ## 📁 Project Structure
 
 ```
-cardia/
-├── client/                 # React frontend
+cardia-Heart-Monitoring-App/
+├── client/                      # React + Vite frontend
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── InputForm.jsx
-│   │   │   └── ResultCard.jsx
-│   │   ├── App.jsx
+│   │   │   ├── InputForm.jsx    # Patient data input form
+│   │   │   ├── ResultCard.jsx   # Risk display component
+│   │   │   └── FileUpload.jsx   # OCR medical report upload
+│   │   ├── App.jsx              # Main application
 │   │   └── main.jsx
-│   ├── tailwind.config.js
+│   ├── tailwind.config.cjs
 │   └── package.json
-├── server/                 # Express backend
+├── server/                      # Express backend
 │   ├── routes/
-│   │   └── predict.js
-│   ├── index.js
-│   ├── .env
+│   │   ├── predictONNX.js       # ONNX inference endpoint
+│   │   └── extract.js           # OCR extraction endpoint
+│   ├── models/
+│   │   ├── best_model.onnx      # Trained Random Forest (60KB)
+│   │   └── heart_columns.json   # Feature order & encodings
+│   ├── index.js                 # Server entry point
+│   ├── .env                     # Environment config
+│   ├── ONNX_SETUP.md            # Model integration guide
 │   └── package.json
-├── package.json            # Root package.json
+├── package.json                 # Root scripts
 └── README.md
 ```
 
@@ -102,7 +115,7 @@ cardia/
 ```http
 GET /health
 ```
-Returns server status and information.
+Returns server status and uptime.
 
 #### Heart Risk Prediction (ONNX Model)
 ```http
@@ -110,14 +123,17 @@ POST /predict
 Content-Type: application/json
 
 {
-  "age": 45,
-  "sex": "Male",
-  "chestPainType": "Typical Angina",
-  "restingBP": 130,
-  "cholesterol": 200,
-  "fastingBS": false,
-  "maxHeartRate": 150,
-  "exerciseAngina": false
+  "age": 55,
+  "sex": "M",
+  "chestPainType": "ASY",
+  "restingBP": 140,
+  "cholesterol": 240,
+  "fastingBS": 1,
+  "restingECG": "Normal",
+  "maxHeartRate": 130,
+  "exerciseAngina": "Y",
+  "oldpeak": 2.5,
+  "stSlope": "Flat"
 }
 ```
 
@@ -125,12 +141,12 @@ Content-Type: application/json
 ```json
 {
   "success": true,
-  "risk": 0.613,
-  "riskLevel": "Moderate",
-  "confidence": 0.89,
-  "timestamp": "2025-01-09T18:00:00.000Z",
+  "riskScore": 0.78,
+  "status": "High Risk",
+  "message": "Multiple risk factors detected. Please consult with a healthcare professional...",
+  "confidence": 0.92,
   "usingONNX": true,
-  "modelVersion": "heart_model.onnx"
+  "modelVersion": "2.0.0-onnx"
 }
 ```
 
@@ -181,15 +197,23 @@ file: <medical_report.pdf or image>
 ## 🧠 AI Model Details
 
 ### ONNX Random Forest Model
-- **Accuracy**: 89.13%
-- **F1 Score**: 0.907
-- **ROC AUC**: 0.954
-- **Features**: 15 clinical parameters
+- **Model**: `best_model.onnx` (~60 KB)
+- **Type**: Random Forest Classifier
+- **Features**: 11 clinical parameters (Age, Sex, ChestPainType, RestingBP, Cholesterol, FastingBS, RestingECG, MaxHR, ExerciseAngina, Oldpeak, ST_Slope)
 - **Training**: Scikit-learn → ONNX export
-- **Inference**: CPU-based using onnxruntime-node
+- **Inference**: CPU-based via `onnxruntime-node`
+- **Performance**: High accuracy on heart disease dataset
 
-### Model File
+### How Predictions Work
+1. **Input preprocessing**: Categorical features encoded (Sex, ChestPainType, etc.)
+2. **Feature ordering**: Matches training column order from `heart_columns.json`
+3. **ONNX inference**: Model runs on Float32 tensor `[1, 11]`
+4. **Risk score**: Output probability (0-1) mapped to risk level
+5. **Interpretation**: Low (<0.45), Moderate (0.45-0.7), High (>0.7)
+
+### Model File Location
 - **Path**: `server/models/best_model.onnx`
+- **Tracked in Git**: Force-added despite `.gitignore` (see [ONNX_SETUP.md](server/ONNX_SETUP.md))
 
 ## 🔧 Configuration
 
@@ -228,37 +252,34 @@ npm run client:build
 npm run clean
 ```
 
-## 📊 Roadmap
+## 📊 Development Status
 
-### Phase 2 (✅ Complete)
-- [x] ONNX model integration
-- [x] Real ML predictions (Random Forest)
-- [x] LLM explanation service (microsoft/phi-2)
-- [x] OCR medical report extraction
-- [x] Enhanced UI with AI insights
+### Current (v1.0 - ONNX-Only)
+- ✅ ONNX model integration (`best_model.onnx`)
+- ✅ Real ML predictions (Random Forest)
+- ✅ OCR medical report extraction
+- ✅ Responsive UI with risk visualization
+- ✅ Full MERN stack operational
+- ✅ Documentation & setup guides
 
-### Phase 3 (Advanced Features)
-- [ ] MongoDB database setup
+### Future Enhancements
+- [ ] MongoDB database for persistence
 - [ ] User authentication & profiles
-- [ ] Historical risk tracking
-- [ ] Data visualization dashboard
+- [ ] Historical risk tracking & trends
+- [ ] Enhanced data visualizations
 - [ ] PDF report generation
-- [ ] GPU acceleration for LLM
-
-### Phase 4 (Production Ready)
+- [ ] Additional ML models (ensemble)
 - [ ] Docker deployment
 - [ ] CI/CD pipeline
-- [ ] Performance optimization
-- [ ] Security hardening
-- [ ] Monitoring & logging
-- [ ] HIPAA compliance considerations
+- [ ] Production security hardening
 
 ## ⚠️ Important Disclaimers
 
-- **Educational Purpose**: This application is for educational and demonstration purposes only
-- **Not Medical Advice**: Predictions should not replace professional medical consultation
-- **Model File**: Ensure `server/models/best_model.onnx` is present
-- **Beta Software**: This is a development prototype
+- **Educational Purpose Only**: This application is for educational and demonstration purposes
+- **Not Medical Advice**: Predictions are NOT a substitute for professional medical consultation
+- **Always Consult Healthcare Providers**: Any health decisions should involve qualified medical professionals
+- **Model File Required**: Ensure `server/models/best_model.onnx` exists before starting the server
+- **Development Prototype**: This is a demonstration application, not a production medical tool
 
 ## 🤝 Contributing
 
@@ -281,4 +302,4 @@ For questions, issues, or feature requests:
 
 ---
 
-**Cardia v1.0** - Built with ❤️ using the MERN stack
+**Cardia v1.0 (ONNX-Only)** - Built with ❤️ using React, Express, and ONNX Runtime
